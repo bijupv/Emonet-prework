@@ -63,7 +63,7 @@ def make_batch_roberta(sessions):
         data = session[0]
         label_list = session[1]
         
-        context_speaker, context, emotion, sentiment = data
+        context_speaker, context, speaker_utt_history, emotion, sentiment = data
         now_speaker = context_speaker[-1]
         speaker_utt_list = []
         
@@ -72,9 +72,9 @@ def make_batch_roberta(sessions):
             inputString += '<s' + str(speaker+1) + '> ' # s1, s2, s3...
             inputString += utt + " "
             
-            if turn<len(context_speaker)-1 and speaker == now_speaker:
-                speaker_utt_list.append(encode_right_truncated(utt, roberta_tokenizer))
-        
+        for i in range(len(speaker_utt_history)-1):
+            speaker_utt_list.append(encode_right_truncated(speaker_utt_history[i], roberta_tokenizer))
+          
         concat_string = inputString.strip()
         batch_input.append(encode_right_truncated(concat_string, roberta_tokenizer))
         

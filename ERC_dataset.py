@@ -1,6 +1,9 @@
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pack_sequence
 import random
+import json
+from collections import deque
+
     
 class MELD_loader(Dataset):
     def __init__(self, txt_file, dataclass):
@@ -73,6 +76,7 @@ class Emory_loader(Dataset):
         self.speakerNum = []
         self.emoSet = set()
         self.sentiSet = set()
+        window_size = 10
         try:
             with open('./speaker_list.txt', 'r') as file:
                 # Read the content of the file
@@ -85,6 +89,14 @@ class Emory_loader(Dataset):
             print("there is no such file")
             speaker_list = []        
 
+        try:  
+            with open('./uttr_history.json', 'r') as file:
+                uttr_history = json.load(file)
+                # Convert deque values back to deque objects
+                for speaker, uttr in uttr_history.items():
+                    uttr_history[speaker] = deque(uttr, maxlen=window_size)
+        except FileNotFoundError:
+            uttr_history = {}
             
         for i, data in enumerate(dataset):
             if data == '\n' and len(self.dialogs) > 0:
@@ -92,8 +104,8 @@ class Emory_loader(Dataset):
                 context = []
                 context_speaker = []
                 continue
-            speaker, utt, emo = data.strip().split('\t')
-            context.append(utt)
+            speaker, uttr, emo = data.strip().split('\t')
+            context.append(uttr)
             
             if emo in pos:
                 senti = "positive"
@@ -109,7 +121,16 @@ class Emory_loader(Dataset):
             speakerCLS = speaker_list.index(speaker)
             context_speaker.append(speakerCLS)
             
-            self.dialogs.append([context_speaker[:], context[:], emodict[emo], senti])
+            if speaker in uttr_history:
+                # If the key already exists, append the value to the existing deque
+                uttr_history[speaker].append(uttr)
+            else:
+                # If the key doesn't exist, create a new deque with maxlen=5
+                uttr_history[speaker] = deque(maxlen=window_size)
+                uttr_history[speaker].append(uttr)
+            
+            speaker_utt_history = list(uttr_history[speaker])
+            self.dialogs.append([context_speaker[:], context[:], speaker_utt_history[:], emodict[emo], senti])
             self.emoSet.add(emodict[emo])
             self.sentiSet.add(senti)
             
@@ -124,6 +145,11 @@ class Emory_loader(Dataset):
             for speaker in speaker_list:
                 file.write(speaker + '\n')
 
+        with open("./uttr_history.json", 'w') as file:
+            uttr_history_dict = {}
+            for key, value in uttr_history.items():
+                uttr_history_dict[key] = list(value)
+            json.dump(uttr_history_dict, file)
         
     def __len__(self):
         return len(self.dialogs)

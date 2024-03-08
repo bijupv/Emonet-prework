@@ -182,7 +182,7 @@ def main():
                 best_epoch = epoch
                 _SaveModel(model, save_path)
         
-        if epoch % 5 == 0:
+        if True: #epoch % 5 == 0:
             logger.info('Epoch: {}'.format(epoch))
             if dataset == 'dailydialog': # micro & macro
                 logger.info('Devleopment ## accuracy: {}, macro-fscore: {}, micro-fscore: {}'.format(dev_acc, dev_fbeta_macro, dev_fbeta_micro))
@@ -208,7 +208,8 @@ def _CalACC(model, dataloader):
             """Prediction"""
             batch_input_tokens, batch_labels, batch_speaker_tokens = data
             batch_input_tokens, batch_labels = batch_input_tokens.cuda(), batch_labels.cuda()
-            
+            #print_tokens(batch_input_tokens, batch_speaker_tokens)
+
             pred_logits = model(batch_input_tokens, batch_speaker_tokens) # (1, clsNum)
             
             """Calculation"""    
@@ -221,7 +222,19 @@ def _CalACC(model, dataloader):
                 correct += 1
         acc = correct/len(dataloader)
     return acc, pred_list, label_list
-        
+
+def print_tokens(input_tokens, speaker_tokens):
+  # Instantiate the tokenizer
+  tokenizer = RobertaTokenizer.from_pretrained("roberta-base")
+  
+  input_text = tokenizer.decode(input_tokens[0], skip_special_tokens=False)
+  logger.info('input: {}\nspeaker: '.format(input_text))
+
+  if speaker_tokens and len(speaker_tokens[0]) != 0:
+    for i in range(len(speaker_tokens[0])):
+      speaker_text = tokenizer.decode(speaker_tokens[0][i], skip_special_tokens=False)
+      logger.info('{}'.format(speaker_text))
+          
 def _SaveModel(model, path):
     if not os.path.exists(path):
         os.makedirs(path)
@@ -235,7 +248,7 @@ if __name__ == '__main__':
     parser  = argparse.ArgumentParser(description = "Emotion Classifier" )
     parser.add_argument( "--batch", type=int, help = "batch_size", default = 1)
     
-    parser.add_argument( "--epoch", type=int, help = 'training epohcs', default = 2) # 12 for iemocap
+    parser.add_argument( "--epoch", type=int, help = 'training epohcs', default = 10) # 12 for iemocap
     parser.add_argument( "--norm", type=int, help = "max_grad_norm", default = 10)
     parser.add_argument( "--lr", type=float, help = "learning rate", default = 1e-6) # 1e-5
     parser.add_argument( "--sample", type=float, help = "sampling trainign dataset", default = 1.0) # 
