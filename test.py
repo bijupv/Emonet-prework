@@ -11,8 +11,6 @@ from model import ERC_model
 from utils import make_batch_roberta
 
 from torch.utils.data import Dataset, DataLoader
-from transformers import get_linear_schedule_with_warmup
-import pdb
 import argparse, logging
 from sklearn.metrics import precision_recall_fscore_support
     
@@ -20,12 +18,8 @@ from sklearn.metrics import precision_recall_fscore_support
 def main():    
     initial = args.initial
     model_type = 'roberta-large'
-    if 'roberta' in model_type:
-        make_batch = make_batch_roberta
-    elif model_type == 'bert-large-uncased':
-        make_batch = make_batch_bert
-    else:
-        make_batch = make_batch_gpt      
+    make_batch = make_batch_roberta
+          
     freeze = args.freeze
     if freeze:
         freeze_type = 'freeze'
@@ -54,10 +48,10 @@ def main():
     dev_path = os.path.join(data_path, dataset+'_dev.txt')
     test_path = os.path.join(data_path, dataset+'_test.txt')
 
-    dev_dataset = DATA_loader(dev_path, dataclass)
+    dev_dataset = DATA_loader(dev_path, dataclass, 'dev')
     dev_dataloader = DataLoader(dev_dataset, batch_size=1, shuffle=False, num_workers=4, collate_fn=make_batch)        
 
-    test_dataset = DATA_loader(test_path, dataclass)
+    test_dataset = DATA_loader(test_path, dataclass, 'test')
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=4, collate_fn=make_batch)
     
     print('Data: ', dataset, '!!!')
@@ -113,11 +107,10 @@ if __name__ == '__main__':
     
     """Parameters"""
     parser  = argparse.ArgumentParser(description = "Emotion Classifier" )    
-    parser.add_argument('-dya', '--dyadic', action='store_true', help='dyadic conversation')
     parser.add_argument( "--cls", help = 'emotion or sentiment', default = 'emotion')
     parser.add_argument( "--initial", help = 'pretrained or scratch', default = 'pretrained')
     parser.add_argument('-fr', '--freeze', action='store_true', help='freezing PM')
-    parser.add_argument( "--sample", type=float, help = "sampling trainign dataset", default = 1.0) # 
+    parser.add_argument( "--sample", type=float, help = "sampling training dataset", default = 1.0) # 
         
     args = parser.parse_args()
     

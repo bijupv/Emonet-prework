@@ -6,7 +6,7 @@ from collections import deque
 
     
 class Emory_loader(Dataset):
-    def __init__(self, txt_file, dataclass):
+    def __init__(self, txt_file, dataclass, data_type):
         self.dialogs = []
         
         f = open(txt_file, 'r')
@@ -27,7 +27,7 @@ class Emory_loader(Dataset):
         
         self.classCounts = [0 for _ in range(len(self.emoList))]
         self.sentCounts = [0 for _ in range(len(self.sentList))]
-        window_size = 10
+        window_size = 12
         try:
             with open('./speaker_list.txt', 'r') as file:
                 # Read the content of the file
@@ -39,14 +39,18 @@ class Emory_loader(Dataset):
             # If the file does not exist, continue without any error
             print("there is no such file")
             speaker_list = []        
-
-        try:  
-            with open('./uttr_history.json', 'r') as file:
-                uttr_history = json.load(file)
-                # Convert deque values back to deque objects
-                for speaker, uttr in uttr_history.items():
-                    uttr_history[speaker] = deque(uttr, maxlen=window_size)
-        except FileNotFoundError:
+        
+        if data_type != 'train':
+            #use uttr histroy only if it is dev/test. For each epoc in training, build fresh history.
+            try:  
+                with open('./uttr_history.json', 'r') as file:
+                    uttr_history = json.load(file)
+                    # Convert deque values back to deque objects
+                    for speaker, uttr in uttr_history.items():
+                        uttr_history[speaker] = deque(uttr, maxlen=window_size)
+            except FileNotFoundError:
+                uttr_history = {}
+        else:
             uttr_history = {}
             
         for i, data in enumerate(dataset):
@@ -96,12 +100,14 @@ class Emory_loader(Dataset):
         with open("./speaker_list.txt", 'w') as file:
             for speaker in speaker_list:
                 file.write(speaker + '\n')
-
-        with open("./uttr_history.json", 'w') as file:
-            uttr_history_dict = {}
-            for key, value in uttr_history.items():
-                uttr_history_dict[key] = list(value)
-            json.dump(uttr_history_dict, file)
+        
+        if data_type == 'train':
+            # save only if it is a train, do not want to save the uttr history of dev/test
+            with open("./uttr_history.json", 'w') as file:
+                uttr_history_dict = {}
+                for key, value in uttr_history.items():
+                    uttr_history_dict[key] = list(value)
+                json.dump(uttr_history_dict, file)
 
     def get_class_weights(self):
         return self.class_weights  

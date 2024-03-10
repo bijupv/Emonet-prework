@@ -61,7 +61,7 @@ def main():
     dev_path = data_path + dataset+'_dev.txt'
     test_path = data_path + dataset+'_test.txt'
             
-    train_dataset = DATA_loader(train_path, dataclass)
+    train_dataset = DATA_loader(train_path, dataclass, 'train')
     if sample < 1.0:
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=4, collate_fn=make_batch)
     else:
@@ -69,10 +69,10 @@ def main():
     train_sample_num = int(len(train_dataloader)*sample)
     class_weights = train_dataset.get_class_weights()
     
-    dev_dataset = DATA_loader(dev_path, dataclass)
+    dev_dataset = DATA_loader(dev_path, dataclass, 'dev')
     dev_dataloader = DataLoader(dev_dataset, batch_size=1, shuffle=False, num_workers=4, collate_fn=make_batch)
     
-    test_dataset = DATA_loader(test_path, dataclass)
+    test_dataset = DATA_loader(test_path, dataclass, 'test')
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=4, collate_fn=make_batch)
     
     """logging and path"""
@@ -156,7 +156,7 @@ def main():
             logger.info('Devleopment ## accuracy: {}, precision: {}, recall: {}, fscore: {}'.format(dev_acc, dev_pre, dev_rec, dev_fbeta))
             logger.info('')
         
-    logger.info('Final Fscore ## test-accuracy: {}, test-fscore: {}, test_epoch: {}'.format(test_acc, test_fbeta, best_epoch))         
+    logger.info('Final Fscore ## test-accuracy: {}, test-fscore: {}, test_epoch: {}, dev-fscore: {}'.format(test_acc, test_fbeta, best_epoch, best_dev_fscore))         
     
 def _CalACC(model, dataloader):
     model.eval()
@@ -218,7 +218,6 @@ if __name__ == '__main__':
     
     parser.add_argument( "--pretrained", help = 'roberta-large or bert-large-uncased or gpt2 or gpt2-large or gpt2-medium', default = 'roberta-large')    
     parser.add_argument( "--initial", help = 'pretrained or scratch', default = 'pretrained')
-    parser.add_argument('-dya', '--dyadic', action='store_true', help='dyadic conversation')
     parser.add_argument('-fr', '--freeze', action='store_true', help='freezing PM')
     parser.add_argument( "--cls", help = 'emotion or sentiment', default = 'emotion')
         
