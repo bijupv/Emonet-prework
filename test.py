@@ -6,9 +6,9 @@ import torch
 import torch.nn as nn
 
 from transformers import RobertaTokenizer
-from ERC_dataset import MELD_loader, Emory_loader, IEMOCAP_loader, DD_loader
+from ERC_dataset import Emory_loader
 from model import ERC_model
-from utils import make_batch_roberta, make_batch_bert, make_batch_gpt
+from utils import make_batch_roberta
 
 from torch.utils.data import Dataset, DataLoader
 from transformers import get_linear_schedule_with_warmup
@@ -19,7 +19,7 @@ from sklearn.metrics import precision_recall_fscore_support
 ## finetune RoBETa-large
 def main():    
     initial = args.initial
-    model_type = args.pretrained
+    model_type = 'roberta-large'
     if 'roberta' in model_type:
         make_batch = make_batch_roberta
     elif model_type == 'bert-large-uncased':
@@ -32,18 +32,12 @@ def main():
     else:
         freeze_type = 'no_freeze'    
     sample = args.sample
-    if 'gpt2' in model_type:
-        last = True
-    else:
-        last = False
+    last = False
     
     """Dataset Loading"""
-    dataset_list = ['EMORY']
-    DATA_loader_list = [Emory_loader]
-    #dataset_list = ['MELD', 'EMORY', 'iemocap', 'dailydialog']
-    #DATA_loader_list = [MELD_loader, Emory_loader, IEMOCAP_loader, DD_loader]
+    dataset = 'EMORY'
+    DATA_loader = Emory_loader
     dataclass = args.cls
-    dataType = 'multi'
     
     """Log"""
     log_path = os.path.join('test.log')
@@ -53,54 +47,37 @@ def main():
     logger.setLevel(level=logging.DEBUG)    
     
     """Model Loading"""
-    for dataset, DATA_loader in zip(dataset_list, DATA_loader_list):
-        if dataset == 'MELD':
-            data_path = os.path.join('dataset', dataset, dataType)
-        else:
-            data_path = os.path.join('dataset', dataset)
-        save_path = os.path.join(dataset+'_models', model_type, initial, freeze_type, dataclass, str(sample))
-        print("###Save Path### ", save_path)
+    data_path = os.path.join('dataset', dataset)
+    save_path = os.path.join(dataset+'_models', model_type, initial, freeze_type, dataclass, str(sample))
+    print("###Save Path### ", save_path)
+
+    dev_path = os.path.join(data_path, dataset+'_dev.txt')
+    test_path = os.path.join(data_path, dataset+'_test.txt')
+
+    dev_dataset = DATA_loader(dev_path, dataclass)
+    dev_dataloader = DataLoader(dev_dataset, batch_size=1, shuffle=False, num_workers=4, collate_fn=make_batch)        
+
+    test_dataset = DATA_loader(test_path, dataclass)
+    test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=4, collate_fn=make_batch)
     
-        dev_path = os.path.join(data_path, dataset+'_dev.txt')
-        test_path = os.path.join(data_path, dataset+'_test.txt')
+    print('Data: ', dataset, '!!!')
+    clsNum = len(dev_dataset.labelList)        
+    model = ERC_model(model_type, clsNum, last, freeze, initial)
+    modelfile = os.path.join(save_path, 'model.bin')
+    model.load_state_dict(torch.load(modelfile))
+    model = model.cuda()    
+    model.eval()           
 
-        dev_dataset = DATA_loader(dev_path, dataclass)
-        dev_dataloader = DataLoader(dev_dataset, batch_size=1, shuffle=False, num_workers=4, collate_fn=make_batch)        
+    """Dev & Test evaluation"""
+    logger.info('####### ' + dataset + ' #######')
+    dev_acc, dev_pred_list, dev_label_list = _CalACC(model, dev_dataloader)
+    dev_pre, dev_rec, dev_fbeta, _ = precision_recall_fscore_support(dev_label_list, dev_pred_list, average='weighted')
 
-        test_dataset = DATA_loader(test_path, dataclass)
-        test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=4, collate_fn=make_batch)
-        
-        print('Data: ', dataset, '!!!')
-        clsNum = len(dev_dataset.labelList)        
-        model = ERC_model(model_type, clsNum, last, freeze, initial)
-        modelfile = os.path.join(save_path, 'model.bin')
-        model.load_state_dict(torch.load(modelfile))
-        model = model.cuda()    
-        model.eval()           
+    test_acc, test_pred_list, test_label_list = _CalACC(model, test_dataloader)
+    test_pre, test_rec, test_fbeta, _ = precision_recall_fscore_support(test_label_list, test_pred_list, average='weighted')
 
-        """Dev & Test evaluation"""
-        logger.info('####### ' + dataset + ' #######')
-        if dataset == 'dailydialog': # micro & macro
-            dev_acc, dev_pred_list, dev_label_list = _CalACC(model, dev_dataloader)
-            dev_pre_macro, dev_rec_macro, dev_fbeta_macro, _ = precision_recall_fscore_support(dev_label_list, dev_pred_list, average='macro')
-            dev_pre_micro, dev_rec_micro, dev_fbeta_micro, _ = precision_recall_fscore_support(dev_label_list, dev_pred_list, labels=[0,1,2,3,5,6], average='micro') # neutral x
-
-            test_acc, test_pred_list, test_label_list = _CalACC(model, test_dataloader)
-            test_pre_macro, test_rec_macro, test_fbeta_macro, _ = precision_recall_fscore_support(test_label_list, test_pred_list, average='macro')
-            test_pre_micro, test_rec_micro, test_fbeta_micro, _ = precision_recall_fscore_support(test_label_list, test_pred_list, labels=[0,1,2,3,5,6], average='micro') # neutral x
-        else: # weight
-            dev_acc, dev_pred_list, dev_label_list = _CalACC(model, dev_dataloader)
-            dev_pre, dev_rec, dev_fbeta, _ = precision_recall_fscore_support(dev_label_list, dev_pred_list, average='weighted')
-
-            test_acc, test_pred_list, test_label_list = _CalACC(model, test_dataloader)
-            test_pre, test_rec, test_fbeta, _ = precision_recall_fscore_support(test_label_list, test_pred_list, average='weighted')
-
-        if dataset == 'dailydialog': # micro & macro
-            logger.info('Fscore ## accuracy: {}, dev-macro: {}, dev-micro: {}, test-macro: {}, test-micro: {}'\
-                        .format(dev_acc*100, dev_fbeta_macro, dev_fbeta_micro, test_fbeta_macro, test_fbeta_micro))
-        else:
-            logger.info('Fscore ## accuracy: {}, dev-fscore: {}, test-fscore: {}'.format(test_acc*100, dev_fbeta, test_fbeta))
-        logger.info('')
+    logger.info('Fscore ## accuracy: {}, dev-fscore: {}, test-fscore: {}'.format(test_acc*100, dev_fbeta, test_fbeta))
+    logger.info('')
     
 def _CalACC(model, dataloader):
     model.eval()
@@ -136,7 +113,6 @@ if __name__ == '__main__':
     
     """Parameters"""
     parser  = argparse.ArgumentParser(description = "Emotion Classifier" )    
-    parser.add_argument( "--pretrained", help = 'roberta-large', default = 'roberta-large')
     parser.add_argument('-dya', '--dyadic', action='store_true', help='dyadic conversation')
     parser.add_argument( "--cls", help = 'emotion or sentiment', default = 'emotion')
     parser.add_argument( "--initial", help = 'pretrained or scratch', default = 'pretrained')

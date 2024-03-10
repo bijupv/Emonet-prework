@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 
 from transformers import RobertaTokenizer
-from ERC_dataset import MELD_loader, Emory_loader, IEMOCAP_loader, DD_loader
+from ERC_dataset import Emory_loader
 from model import ERC_model
 # from ERCcombined import ERC_model
 
@@ -16,7 +16,7 @@ import pdb
 import argparse, logging
 from sklearn.metrics import precision_recall_fscore_support
 
-from utils import make_batch_roberta, make_batch_bert, make_batch_gpt
+from utils import make_batch_roberta
 
 def CELoss(pred_outs, labels):
     """
@@ -38,37 +38,19 @@ def WCELoss(pred_outs, labels, weights):
 def main():    
     """Dataset Loading"""
     batch_size = args.batch
-    dataset = args.dataset
+    dataset = 'EMORY'
     dataclass = args.cls
     sample = args.sample
-    model_type = args.pretrained
+    model_type = 'roberta-large'
     freeze = args.freeze
     initial = args.initial
     
     dataType = 'multi'
-    if dataset == 'MELD':
-        if args.dyadic:
-            dataType = 'dyadic'
-        else:
-            dataType = 'multi'
-        data_path = './dataset/MELD/'+dataType+'/'
-        DATA_loader = MELD_loader
-    elif dataset == 'EMORY':
-        data_path = './dataset/EMORY/'
-        DATA_loader = Emory_loader
-    elif dataset == 'iemocap':
-        data_path = './dataset/iemocap/'
-        DATA_loader = IEMOCAP_loader
-    elif dataset == 'dailydialog':
-        data_path = './dataset/dailydialog/'
-        DATA_loader = DD_loader    
-        
+    data_path = './dataset/EMORY/'
+    DATA_loader = Emory_loader
+            
     if 'roberta' in model_type:
         make_batch = make_batch_roberta
-    elif model_type == 'bert-large-uncased':
-        make_batch = make_batch_bert
-    else:
-        make_batch = make_batch_gpt  
         
     if freeze:
         freeze_type = 'freeze'
@@ -94,7 +76,7 @@ def main():
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=4, collate_fn=make_batch)
     
     """logging and path"""
-    save_path = os.path.join(dataset+'_models', model_type, initial, freeze_type, dataclass, str(sample))
+    save_path = os.path.join('EMORY_models', model_type, initial, freeze_type, dataclass, str(sample))
     
     print("###Save Path### ", save_path)
     log_path = os.path.join(save_path, 'train.log')
@@ -107,10 +89,7 @@ def main():
     logger.setLevel(level=logging.DEBUG)      
     
     """Model Loading"""
-    if 'gpt2' in model_type:
-        last = True
-    else:
-        last = False
+    last = False
         
     print('DataClass: ', dataclass, '!!!') # emotion
     clsNum = len(train_dataset.labelList)
@@ -158,51 +137,26 @@ def main():
             
         """Dev & Test evaluation"""
         model.eval()
-        if dataset == 'dailydialog': # micro & macro
-            dev_acc, dev_pred_list, dev_label_list = _CalACC(model, dev_dataloader)
-            dev_pre_macro, dev_rec_macro, dev_fbeta_macro, _ = precision_recall_fscore_support(dev_label_list, dev_pred_list, average='macro')
-            dev_pre_micro, dev_rec_micro, dev_fbeta_micro, _ = precision_recall_fscore_support(dev_label_list, dev_pred_list, labels=[0,1,2,3,5,6], average='micro') # neutral x
+
+        dev_acc, dev_pred_list, dev_label_list = _CalACC(model, dev_dataloader)
+        dev_pre, dev_rec, dev_fbeta, _ = precision_recall_fscore_support(dev_label_list, dev_pred_list, average='weighted')
+
+        """Best Score & Model Save"""
+        if dev_fbeta > best_dev_fscore:
+            best_dev_fscore = dev_fbeta
             
-            dev_fscore = dev_fbeta_macro+dev_fbeta_micro
-
-            """Best Score & Model Save"""
-            if dev_fscore > best_dev_fscore_macro + best_dev_fscore_micro:
-                best_dev_fscore_macro = dev_fbeta_macro                
-                best_dev_fscore_micro = dev_fbeta_micro
-                
-                test_acc, test_pred_list, test_label_list = _CalACC(model, test_dataloader)
-                test_pre_macro, test_rec_macro, test_fbeta_macro, _ = precision_recall_fscore_support(test_label_list, test_pred_list, average='macro')
-                test_pre_micro, test_rec_micro, test_fbeta_micro, _ = precision_recall_fscore_support(test_label_list, test_pred_list, labels=[0,1,2,3,5,6], average='micro') # neutral x                
-                
-                best_epoch = epoch
-                _SaveModel(model, save_path)
-        else: # weight
-            dev_acc, dev_pred_list, dev_label_list = _CalACC(model, dev_dataloader)
-            dev_pre, dev_rec, dev_fbeta, _ = precision_recall_fscore_support(dev_label_list, dev_pred_list, average='weighted')
-
-            """Best Score & Model Save"""
-            if dev_fbeta > best_dev_fscore:
-                best_dev_fscore = dev_fbeta
-                
-                test_acc, test_pred_list, test_label_list = _CalACC(model, test_dataloader)
-                test_pre, test_rec, test_fbeta, _ = precision_recall_fscore_support(test_label_list, test_pred_list, average='weighted')                
-                
-                best_epoch = epoch
-                _SaveModel(model, save_path)
+            test_acc, test_pred_list, test_label_list = _CalACC(model, test_dataloader)
+            test_pre, test_rec, test_fbeta, _ = precision_recall_fscore_support(test_label_list, test_pred_list, average='weighted')                
+            
+            best_epoch = epoch
+            _SaveModel(model, save_path)
         
         if True: #epoch % 5 == 0:
             logger.info('Epoch: {}'.format(epoch))
-            if dataset == 'dailydialog': # micro & macro
-                logger.info('Devleopment ## accuracy: {}, macro-fscore: {}, micro-fscore: {}'.format(dev_acc, dev_fbeta_macro, dev_fbeta_micro))
-                logger.info('') 
-            else:
-                logger.info('Devleopment ## accuracy: {}, precision: {}, recall: {}, fscore: {}'.format(dev_acc, dev_pre, dev_rec, dev_fbeta))
-                logger.info('')
+            logger.info('Devleopment ## accuracy: {}, precision: {}, recall: {}, fscore: {}'.format(dev_acc, dev_pre, dev_rec, dev_fbeta))
+            logger.info('')
         
-    if dataset == 'dailydialog': # micro & macro
-        logger.info('Final Fscore ## test-accuracy: {}, test-macro: {}, test-micro: {}, test_epoch: {}'.format(test_acc, test_fbeta_macro, test_fbeta_micro, best_epoch))
-    else:
-        logger.info('Final Fscore ## test-accuracy: {}, test-fscore: {}, test_epoch: {}'.format(test_acc, test_fbeta, best_epoch))         
+    logger.info('Final Fscore ## test-accuracy: {}, test-fscore: {}, test_epoch: {}'.format(test_acc, test_fbeta, best_epoch))         
     
 def _CalACC(model, dataloader):
     model.eval()
@@ -261,7 +215,6 @@ if __name__ == '__main__':
     parser.add_argument( "--lr", type=float, help = "learning rate", default = 1e-6) # 1e-5
     parser.add_argument( "--sample", type=float, help = "sampling trainign dataset", default = 1.0) # 
 
-    parser.add_argument( "--dataset", help = 'MELD or EMORY or iemocap or dailydialog', default = 'EMORY')
     
     parser.add_argument( "--pretrained", help = 'roberta-large or bert-large-uncased or gpt2 or gpt2-large or gpt2-medium', default = 'roberta-large')    
     parser.add_argument( "--initial", help = 'pretrained or scratch', default = 'pretrained')
