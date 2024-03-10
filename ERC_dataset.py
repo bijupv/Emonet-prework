@@ -74,8 +74,11 @@ class Emory_loader(Dataset):
         context = []
         context_speaker = []
         self.speakerNum = []
-        self.emoSet = set()
-        self.sentiSet = set()
+        self.emoList = sorted(["joy", "mad", "peaceful", "powerful", "neutral", "sad", 'scared'])
+        self.sentList = sorted(["positive", "negative", "neutral"])
+        
+        self.classCounts = [0 for _ in range(len(self.emoList))]
+        self.sentCounts = [0 for _ in range(len(self.sentList))]
         window_size = 10
         try:
             with open('./speaker_list.txt', 'r') as file:
@@ -131,15 +134,16 @@ class Emory_loader(Dataset):
             
             speaker_utt_history = list(uttr_history[speaker])
             self.dialogs.append([context_speaker[:], context[:], speaker_utt_history[:], emodict[emo], senti])
-            self.emoSet.add(emodict[emo])
-            self.sentiSet.add(senti)
-            
-        self.emoList = sorted(self.emoSet)
-        self.sentiList = sorted(self.sentiSet)
+            self.classCounts[self.emoList.index(emodict[emo])]+=1
+            self.sentCounts[self.sentList.index(senti)]+=1
+             
         if dataclass == 'emotion':
             self.labelList = self.emoList
+            self.class_weights = [min(self.classCounts) / count for count in self.classCounts]
         else:
             self.labelList = self.sentiList        
+            self.class_weights = [min(self.sentCounts) / count for count in self.sentCounts]
+
         self.speakerNum.append(len(context_speaker))
         with open("./speaker_list.txt", 'w') as file:
             for speaker in speaker_list:
@@ -150,6 +154,9 @@ class Emory_loader(Dataset):
             for key, value in uttr_history.items():
                 uttr_history_dict[key] = list(value)
             json.dump(uttr_history_dict, file)
+
+    def get_class_weights(self):
+        return self.class_weights  
         
     def __len__(self):
         return len(self.dialogs)

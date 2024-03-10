@@ -27,6 +27,12 @@ def CELoss(pred_outs, labels):
     loss_val = loss(pred_outs, labels)
     return loss_val
 
+def WCELoss(pred_outs, labels, weights):
+    loss = nn.CrossEntropyLoss()
+    loss_val = loss(pred_outs, labels)
+    loss_val = loss_val * weights[labels]
+    return loss_val  
+
     
 ## finetune RoBETa-large
 def main():    
@@ -79,6 +85,7 @@ def main():
     else:
         train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, collate_fn=make_batch)
     train_sample_num = int(len(train_dataloader)*sample)
+    class_weights = train_dataset.get_class_weights()
     
     dev_dataset = DATA_loader(dev_path, dataclass)
     dev_dataloader = DataLoader(dev_dataset, batch_size=1, shuffle=False, num_workers=4, collate_fn=make_batch)
@@ -140,7 +147,8 @@ def main():
             pred_logits = model(batch_input_tokens, batch_speaker_tokens)
 
             """Loss calculation & training"""
-            loss_val = CELoss(pred_logits, batch_labels)
+            #loss_val = CELoss(pred_logits, batch_labels)
+            loss_val = WCELoss(pred_logits, batch_labels, class_weights)
             
             loss_val.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)  # Gradient clipping is not in AdamW anymore (so you can use amp without issue)
