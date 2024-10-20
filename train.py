@@ -210,10 +210,10 @@ if __name__ == '__main__':
     parser  = argparse.ArgumentParser(description = "Emotion Classifier" )
     parser.add_argument( "--batch", type=int, help = "batch_size", default = 1)
     
-    parser.add_argument( "--epoch", type=int, help = 'training epohcs', default = 10) # 12 for iemocap
+    parser.add_argument( "--epoch", type=int, help = 'training epohcs', default = 5) 
     parser.add_argument( "--norm", type=int, help = "max_grad_norm", default = 10)
     parser.add_argument( "--lr", type=float, help = "learning rate", default = 1e-6) # 1e-5
-    parser.add_argument( "--sample", type=float, help = "sampling trainign dataset", default = 1.0) # 
+    parser.add_argument( "--sample", type=float, help = "sampling training dataset", default = 1.0) # 
 
     
     parser.add_argument( "--pretrained", help = 'roberta-large or bert-large-uncased or gpt2 or gpt2-large or gpt2-medium', default = 'roberta-large')    
